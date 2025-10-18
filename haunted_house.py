@@ -147,12 +147,18 @@ class MotionDetector:
 class VideoController:
     """Controls video playback using VLC"""
 
-    def __init__(self, fullscreen=True, mute_ambient=False):
+    def __init__(self, fullscreen=True, mute_ambient=False, background_audio=None, background_audio_volume=30):
         # VLC options for video playback
-        vlc_args = ['--no-video-title-show', '--vout=xcb_xv', '--video-on-top', '--no-osd', '--avcodec-hw=none']
+        vlc_args = [
+            '--no-video-title-show',
+            '--vout=xcb_xv',
+            '--video-on-top',
+            '--no-osd',
+            '--avcodec-hw=none'
+        ]
 
         logger.info(f"Initializing VLC with args: {vlc_args}")
-        logger.info(f"VideoController settings: fullscreen={fullscreen}, mute_ambient={mute_ambient}")
+        logger.info(f"VideoController settings: fullscreen={fullscreen}, mute_ambient={mute_ambient}, background_audio={background_audio}, bg_volume={background_audio_volume}")
         self.instance = vlc.Instance(vlc_args)
         self.player = self.instance.media_player_new()
         self.fullscreen = fullscreen
@@ -166,6 +172,19 @@ class VideoController:
         self.playlist_index = 0
         self.is_playing = False
         self.current_mode = None
+
+        # Background audio player
+        self.background_audio_player = None
+        if background_audio and os.path.exists(background_audio):
+            logger.info(f"Setting up background audio: {background_audio}")
+            audio_instance = vlc.Instance()
+            self.background_audio_player = audio_instance.media_player_new()
+            media = audio_instance.media_new(background_audio)
+            media.add_option('input-repeat=-1')  # Loop forever
+            self.background_audio_player.set_media(media)
+            self.background_audio_player.audio_set_volume(background_audio_volume)
+            self.background_audio_player.play()
+            logger.info(f"Background audio started at volume {background_audio_volume}")
 
     def play_video(self, video_path, loop=False, mode=None):
         """Play a single video"""
@@ -232,6 +251,10 @@ class VideoController:
         self.player.stop()
         self.is_playing = False
 
+        # Stop background audio if it exists
+        if self.background_audio_player:
+            self.background_audio_player.stop()
+
     def is_video_playing(self):
         """Check if video is currently playing"""
         state = self.player.get_state()
@@ -263,7 +286,9 @@ class HauntedHouse:
 
         self.video_controller = VideoController(
             fullscreen=self.config.get('fullscreen', True),
-            mute_ambient=self.config.get('mute_ambient', False)
+            mute_ambient=self.config.get('mute_ambient', False),
+            background_audio=self.config.get('background_audio'),
+            background_audio_volume=self.config.get('background_audio_volume', 30)
         )
 
         self.mode = PlaybackMode.IDLE
