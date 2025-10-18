@@ -90,19 +90,29 @@ class MotionDetector:
 
         # Check if any contour is large enough
         motion_detected = False
+        max_area = 0
         for contour in contours:
-            if cv2.contourArea(contour) > self.min_area:
+            area = cv2.contourArea(contour)
+            if area > max_area:
+                max_area = area
+            if area > self.min_area:
                 motion_detected = True
                 break
+
+        # Log motion detection attempts periodically
+        if motion_detected or self.motion_frame_count > 0:
+            logger.info(f"Motion check: detected={motion_detected}, max_area={max_area:.0f}, frame_count={self.motion_frame_count}/{self.frames_required}, threshold={self.min_area}")
 
         # Debouncing logic - require consecutive frames
         if motion_detected:
             self.motion_frame_count += 1
             if self.motion_frame_count >= self.frames_required:
-                logger.debug(f"Motion confirmed after {self.motion_frame_count} frames")
+                logger.info(f"!!! MOTION CONFIRMED after {self.motion_frame_count} frames - TRIGGERING !!!")
                 self.motion_frame_count = 0  # Reset counter
                 return True
         else:
+            if self.motion_frame_count > 0:
+                logger.info(f"Motion lost - resetting counter from {self.motion_frame_count}")
             self.motion_frame_count = 0  # Reset if no motion
 
         return False
@@ -116,6 +126,7 @@ class VideoController:
         vlc_args = ['--no-video-title-show', '--vout=xcb_xv', '--video-on-top', '--no-osd', '--avcodec-hw=none']
 
         logger.info(f"Initializing VLC with args: {vlc_args}")
+        logger.info(f"VideoController settings: fullscreen={fullscreen}, mute_ambient={mute_ambient}")
         self.instance = vlc.Instance(vlc_args)
         self.player = self.instance.media_player_new()
         self.fullscreen = fullscreen
@@ -136,27 +147,31 @@ class VideoController:
             logger.error(f"Video not found: {video_path}")
             return False
 
-        logger.info(f"Playing video: {video_path} (loop={loop}, mode={mode})")
+        logger.info(f"Playing video: {video_path} (loop={loop}, mode={mode}, mute_ambient={self.mute_ambient})")
         media = self.instance.media_new(video_path)
 
         if loop:
             media.add_option('input-repeat=-1')
 
         self.player.set_media(media)
-        
-        # Mute ambient videos if configured
-        self.current_mode = mode
-        if mode == 'ambient' and self.mute_ambient:
-            self.player.audio_set_mute(True)
-            logger.info("Ambient audio muted")
-        else:
-            self.player.audio_set_mute(False)
-        
         self.player.play()
         self.is_playing = True
+        self.current_mode = mode
 
-        # Give it a moment to start, then check state
+        # Give it a moment to start
         time.sleep(0.5)
+
+        # Mute ambient videos if configured - do this AFTER play starts
+        if mode == 'ambient' and self.mute_ambient:
+            logger.info(f"MUTING ambient audio (mute_ambient={self.mute_ambient})")
+            self.player.audio_set_mute(True)
+            # Double check it worked
+            is_muted = self.player.audio_get_mute()
+            logger.info(f"Audio mute status after setting: {is_muted}")
+        else:
+            logger.info(f"NOT muting - mode={mode}, mute_ambient={self.mute_ambient}")
+            self.player.audio_set_mute(False)
+
         state = self.player.get_state()
         logger.info(f"VLC player state after play(): {state}")
 
@@ -209,6 +224,8 @@ class HauntedHouse:
         # Load configuration
         with open(config_path, 'r') as f:
             self.config = json.load(f)
+
+        logger.info(f"Loaded configuration: {json.dumps(self.config, indent=2)}")
 
         self.motion_detector = MotionDetector(
             camera_index=self.config.get('camera_index', 0),
