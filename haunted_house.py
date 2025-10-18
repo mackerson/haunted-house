@@ -41,8 +41,6 @@ class MotionDetector:
         self.camera = None
         self.background_subtractor = None
         self.running = False
-        self.last_frame = None
-        self.frame_change_count = 0
 
         # For continuous frame reading
         self.current_frame = None
@@ -108,15 +106,6 @@ class MotionDetector:
             logger.warning("No frame available from camera")
             return False
 
-        # Check if frame is actually changing (diagnostic)
-        import numpy as np
-        if self.last_frame is not None:
-            frame_diff = np.sum(np.abs(frame.astype(float) - self.last_frame.astype(float)))
-            if frame_diff > 1000:  # Arbitrary threshold for "frame changed"
-                self.frame_change_count += 1
-            if self.frame_change_count % 50 == 0:  # Log every 50 frames
-                logger.info(f"Frame diagnostic: frame_diff={frame_diff:.0f}, frames_changed={self.frame_change_count}")
-        self.last_frame = frame.copy()
 
         # Apply background subtraction
         fg_mask = self.background_subtractor.apply(frame)
@@ -136,22 +125,9 @@ class MotionDetector:
                 motion_detected = True
                 break
 
-        # Save debug frames when motion detected
-        if motion_detected:
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            debug_dir = "motion_debug"
-            os.makedirs(debug_dir, exist_ok=True)
-
-            # Save original frame
-            cv2.imwrite(f"{debug_dir}/frame_{timestamp}.jpg", frame)
-            # Save foreground mask
-            cv2.imwrite(f"{debug_dir}/mask_{timestamp}.jpg", fg_mask)
-            # Save thresholded contours
-            cv2.imwrite(f"{debug_dir}/thresh_{timestamp}.jpg", thresh)
-            logger.info(f"Saved debug frames to {debug_dir}/")
-
-        # Always log motion detection for debugging (even when no motion)
-        logger.info(f"Motion check: detected={motion_detected}, max_area={max_area:.0f}, frame_count={self.motion_frame_count}/{self.frames_required}, threshold={self.min_area}")
+        # Log motion detection attempts when motion detected or counting frames
+        if motion_detected or self.motion_frame_count > 0:
+            logger.info(f"Motion check: detected={motion_detected}, max_area={max_area:.0f}, frame_count={self.motion_frame_count}/{self.frames_required}, threshold={self.min_area}")
 
         # Debouncing logic - require consecutive frames
         if motion_detected:
@@ -403,10 +379,7 @@ class HauntedHouse:
         # This prevents false triggers from changing screen brightness
         if not self.video_controller.is_video_playing():
             # Check for motion to trigger story
-            can_trigger = self.can_trigger_story()
-            logger.info(f"Ambient mode (idle): motion_enabled={self.motion_detection_enabled}, can_trigger={can_trigger}")
-
-            if self.motion_detection_enabled and can_trigger:
+            if self.motion_detection_enabled and self.can_trigger_story():
                 if self.motion_detector.detect_motion():
                     logger.info("Motion detected - triggering story mode")
                     self.enter_story_mode()
