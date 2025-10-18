@@ -206,6 +206,9 @@ class VideoController:
         # Give it a moment to start
         time.sleep(0.5)
 
+        # Set volume to 100% for all video playback
+        self.player.audio_set_volume(100)
+
         # Mute ambient videos if configured - do this AFTER play starts
         if mode == 'ambient' and self.mute_ambient:
             logger.info(f"MUTING ambient audio (mute_ambient={self.mute_ambient})")
@@ -250,10 +253,7 @@ class VideoController:
         logger.info("Stopping video playback")
         self.player.stop()
         self.is_playing = False
-
-        # Stop background audio if it exists
-        if self.background_audio_player:
-            self.background_audio_player.stop()
+        # Note: background audio keeps playing - never stop it
 
     def is_video_playing(self):
         """Check if video is currently playing"""
@@ -343,6 +343,14 @@ class HauntedHouse:
         """Start the haunted house system"""
         logger.info("Starting Haunted House system")
         self.running = True
+
+        # Set system volume to 100%
+        import subprocess
+        try:
+            subprocess.run(['amixer', 'sset', 'Master', '100%'], check=True, capture_output=True)
+            logger.info("System volume set to 100%")
+        except Exception as e:
+            logger.warning(f"Could not set system volume: {e}")
 
         # Start motion detector
         self.motion_detector.start()

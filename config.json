@@ -4,7 +4,7 @@
   "motion_threshold": 50,
   "motion_min_area": 20000,
   "background_audio": "audio/storm_loop.mp3",
-  "background_audio_volume": 30,
+  "background_audio_volume": 50,
   "camera_index": 0,
   "camera_warmup_time": 2.0,
   "story_cooldown_seconds": 10,
