@@ -349,7 +349,10 @@ class HauntedHouse:
             self.video_controller.next_in_playlist()
 
         # Check for motion to trigger story
-        if self.motion_detection_enabled and self.can_trigger_story():
+        can_trigger = self.can_trigger_story()
+        logger.info(f"Ambient mode: motion_enabled={self.motion_detection_enabled}, can_trigger={can_trigger}")
+
+        if self.motion_detection_enabled and can_trigger:
             if self.motion_detector.detect_motion():
                 logger.info("Motion detected - triggering story mode")
                 self.enter_story_mode()
