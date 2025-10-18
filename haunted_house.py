@@ -31,11 +31,13 @@ class PlaybackMode(Enum):
 class MotionDetector:
     """Detects motion using webcam and background subtraction"""
 
-    def __init__(self, camera_index=0, threshold=25, min_area=5000, warmup_time=2.0):
+    def __init__(self, camera_index=0, threshold=25, min_area=5000, warmup_time=2.0, frames_required=3):
         self.camera_index = camera_index
         self.threshold = threshold
         self.min_area = min_area
         self.warmup_time = warmup_time
+        self.frames_required = frames_required
+        self.motion_frame_count = 0
         self.camera = None
         self.background_subtractor = None
         self.running = False
@@ -70,7 +72,7 @@ class MotionDetector:
         logger.info("Motion detector stopped")
 
     def detect_motion(self):
-        """Check if motion is detected in current frame"""
+        """Check if motion is detected in current frame with debouncing"""
         if not self.running or not self.camera:
             return False
 
@@ -87,9 +89,21 @@ class MotionDetector:
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # Check if any contour is large enough
+        motion_detected = False
         for contour in contours:
             if cv2.contourArea(contour) > self.min_area:
+                motion_detected = True
+                break
+
+        # Debouncing logic - require consecutive frames
+        if motion_detected:
+            self.motion_frame_count += 1
+            if self.motion_frame_count >= self.frames_required:
+                logger.debug(f"Motion confirmed after {self.motion_frame_count} frames")
+                self.motion_frame_count = 0  # Reset counter
                 return True
+        else:
+            self.motion_frame_count = 0  # Reset if no motion
 
         return False
 
@@ -97,19 +111,15 @@ class MotionDetector:
 class VideoController:
     """Controls video playback using VLC"""
 
-    def __init__(self, fullscreen=True):
+    def __init__(self, fullscreen=True, mute_ambient=False):
         # VLC options for video playback
-        # Remove --quiet temporarily for debugging, add verbose video output
-        vlc_args = [
-            '--no-video-title-show',
-            '--verbose=2',
-            '--vout=auto'  # Auto-detect best video output
-        ]
+        vlc_args = ['--no-video-title-show', '--vout=xcb_xv', '--video-on-top', '--no-osd', '--avcodec-hw=none']
 
         logger.info(f"Initializing VLC with args: {vlc_args}")
         self.instance = vlc.Instance(vlc_args)
         self.player = self.instance.media_player_new()
         self.fullscreen = fullscreen
+        self.mute_ambient = mute_ambient
 
         # Set fullscreen mode
         if self.fullscreen:
@@ -118,20 +128,30 @@ class VideoController:
         self.current_playlist = []
         self.playlist_index = 0
         self.is_playing = False
+        self.current_mode = None
 
-    def play_video(self, video_path, loop=False):
+    def play_video(self, video_path, loop=False, mode=None):
         """Play a single video"""
         if not os.path.exists(video_path):
             logger.error(f"Video not found: {video_path}")
             return False
 
-        logger.info(f"Playing video: {video_path} (loop={loop})")
+        logger.info(f"Playing video: {video_path} (loop={loop}, mode={mode})")
         media = self.instance.media_new(video_path)
 
         if loop:
             media.add_option('input-repeat=-1')
 
         self.player.set_media(media)
+        
+        # Mute ambient videos if configured
+        self.current_mode = mode
+        if mode == 'ambient' and self.mute_ambient:
+            self.player.audio_set_mute(True)
+            logger.info("Ambient audio muted")
+        else:
+            self.player.audio_set_mute(False)
+        
         self.player.play()
         self.is_playing = True
 
@@ -146,7 +166,7 @@ class VideoController:
 
         return True
 
-    def play_playlist(self, video_paths):
+    def play_playlist(self, video_paths, mode=None):
         """Play videos in sequence, looping through the playlist"""
         if not video_paths:
             logger.warning("Empty playlist")
@@ -154,7 +174,8 @@ class VideoController:
 
         self.current_playlist = video_paths
         self.playlist_index = 0
-        return self.play_video(self.current_playlist[self.playlist_index])
+        self.current_mode = mode
+        return self.play_video(self.current_playlist[self.playlist_index], mode=mode)
 
     def next_in_playlist(self):
         """Move to next video in playlist"""
@@ -162,7 +183,7 @@ class VideoController:
             return False
 
         self.playlist_index = (self.playlist_index + 1) % len(self.current_playlist)
-        return self.play_video(self.current_playlist[self.playlist_index])
+        return self.play_video(self.current_playlist[self.playlist_index], mode=self.current_mode)
 
     def stop(self):
         """Stop playback"""
@@ -193,11 +214,13 @@ class HauntedHouse:
             camera_index=self.config.get('camera_index', 0),
             threshold=self.config.get('motion_threshold', 25),
             min_area=self.config.get('motion_min_area', 5000),
-            warmup_time=self.config.get('camera_warmup_time', 2.0)
+            warmup_time=self.config.get('camera_warmup_time', 2.0),
+            frames_required=self.config.get('motion_frames_required', 3)
         )
 
         self.video_controller = VideoController(
-            fullscreen=self.config.get('fullscreen', True)
+            fullscreen=self.config.get('fullscreen', True),
+            mute_ambient=self.config.get('mute_ambient', False)
         )
 
         self.mode = PlaybackMode.IDLE
@@ -331,7 +354,7 @@ class HauntedHouse:
         story_video = self.config['story_video']
         if os.path.exists(story_video):
             self.video_controller.stop()
-            self.video_controller.play_video(story_video, loop=False)
+            self.video_controller.play_video(story_video, loop=False, mode='story')
         else:
             logger.error(f"Story video not found: {story_video}")
             self.enter_ambient_mode()
@@ -344,7 +367,7 @@ class HauntedHouse:
         ambient_videos = self.get_ambient_videos()
         if ambient_videos:
             self.video_controller.stop()
-            self.video_controller.play_playlist(ambient_videos)
+            self.video_controller.play_playlist(ambient_videos, mode='ambient')
         else:
             logger.warning("No ambient videos found")
             self.mode = PlaybackMode.IDLE

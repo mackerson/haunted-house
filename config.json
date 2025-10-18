@@ -1,11 +1,13 @@
 {
   "story_video": "videos/story/main.mp4",
   "ambient_videos_dir": "videos/ambient",
-  "motion_threshold": 25,
+  "motion_threshold": 30,
   "motion_min_area": 5000,
   "camera_index": 0,
   "camera_warmup_time": 2.0,
-  "story_cooldown_seconds": 30,
+  "story_cooldown_seconds": 120,
+  "motion_frames_required": 2,
+  "mute_ambient": true,
   "web_port": 8080,
   "web_host": "0.0.0.0",
   "fullscreen": true

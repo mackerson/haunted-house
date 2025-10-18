@@ -1,0 +1,28 @@
+#!/usr/bin/expect -f
+
+set timeout -1
+set password "6dj6fwm6"
+set host "10.74.95.63"
+set user "michael"
+
+spawn ssh $user@$host "cd ~ && git clone https://github.com/mackerson/haunted-house.git && cd haunted-house && ./install.sh"
+
+expect {
+    "password:" {
+        send "$password\r"
+        exp_continue
+    }
+    "Are you sure you want to continue connecting" {
+        send "yes\r"
+        exp_continue
+    }
+    "Continue anyway?" {
+        send "y\r"
+        exp_continue
+    }
+    "Install as systemd service to run on boot?" {
+        send "y\r"
+        exp_continue
+    }
+    eof
+}
