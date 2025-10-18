@@ -2,7 +2,7 @@
   "story_video": "videos/story/main.mp4",
   "ambient_videos_dir": "videos/ambient",
   "motion_threshold": 30,
-  "motion_min_area": 5000,
+  "motion_min_area": 2000,
   "camera_index": 0,
   "camera_warmup_time": 2.0,
   "story_cooldown_seconds": 10,
