@@ -136,6 +136,20 @@ class MotionDetector:
                 motion_detected = True
                 break
 
+        # Save debug frames when motion detected
+        if motion_detected:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            debug_dir = "motion_debug"
+            os.makedirs(debug_dir, exist_ok=True)
+
+            # Save original frame
+            cv2.imwrite(f"{debug_dir}/frame_{timestamp}.jpg", frame)
+            # Save foreground mask
+            cv2.imwrite(f"{debug_dir}/mask_{timestamp}.jpg", fg_mask)
+            # Save thresholded contours
+            cv2.imwrite(f"{debug_dir}/thresh_{timestamp}.jpg", thresh)
+            logger.info(f"Saved debug frames to {debug_dir}/")
+
         # Always log motion detection for debugging (even when no motion)
         logger.info(f"Motion check: detected={motion_detected}, max_area={max_area:.0f}, frame_count={self.motion_frame_count}/{self.frames_required}, threshold={self.min_area}")
 
