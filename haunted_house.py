@@ -375,14 +375,11 @@ class HauntedHouse:
         if self.video_controller.is_video_ended():
             self.video_controller.next_in_playlist()
 
-        # Don't check for motion while videos are playing
-        # This prevents false triggers from changing screen brightness
-        if not self.video_controller.is_video_playing():
-            # Check for motion to trigger story
-            if self.motion_detection_enabled and self.can_trigger_story():
-                if self.motion_detector.detect_motion():
-                    logger.info("Motion detected - triggering story mode")
-                    self.enter_story_mode()
+        # Check for motion to trigger story
+        if self.motion_detection_enabled and self.can_trigger_story():
+            if self.motion_detector.detect_motion():
+                logger.info("Motion detected - triggering story mode")
+                self.enter_story_mode()
 
     def handle_story_mode(self):
         """Handle story mode logic"""
