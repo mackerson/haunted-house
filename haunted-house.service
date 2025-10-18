@@ -1,0 +1,20 @@
+[Unit]
+Description=Haunted House Motion-Activated Video System
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/haunted-house
+ExecStart=/usr/bin/python3 /home/pi/haunted-house/run.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=/home/pi/.Xauthority"
+
+[Install]
+WantedBy=multi-user.target
