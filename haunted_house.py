@@ -47,10 +47,15 @@ class MotionDetector:
     def start(self):
         """Initialize camera and background subtractor"""
         logger.info(f"Starting camera {self.camera_index}")
-        self.camera = cv2.VideoCapture(self.camera_index)
+        # Use V4L2 backend explicitly and disable buffering
+        self.camera = cv2.VideoCapture(self.camera_index, cv2.CAP_V4L2)
 
         if not self.camera.isOpened():
             raise Exception(f"Could not open camera {self.camera_index}")
+
+        # Set buffer size to 1 to avoid stale frames
+        self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        logger.info(f"Camera buffer size set to: {self.camera.get(cv2.CAP_PROP_BUFFERSIZE)}")
 
         # Give camera time to warm up
         logger.info(f"Camera warming up for {self.warmup_time}s")
@@ -77,11 +82,6 @@ class MotionDetector:
         """Check if motion is detected in current frame with debouncing"""
         if not self.running or not self.camera:
             return False
-
-        # Flush camera buffer by grabbing multiple frames
-        # This ensures we get the latest frame, not a stale one
-        for _ in range(3):
-            self.camera.grab()
 
         ret, frame = self.camera.read()
         if not ret:
