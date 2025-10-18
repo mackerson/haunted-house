@@ -41,6 +41,8 @@ class MotionDetector:
         self.camera = None
         self.background_subtractor = None
         self.running = False
+        self.last_frame = None
+        self.frame_change_count = 0
 
     def start(self):
         """Initialize camera and background subtractor"""
@@ -80,6 +82,16 @@ class MotionDetector:
         if not ret:
             logger.warning("Failed to read from camera")
             return False
+
+        # Check if frame is actually changing (diagnostic)
+        import numpy as np
+        if self.last_frame is not None:
+            frame_diff = np.sum(np.abs(frame.astype(float) - self.last_frame.astype(float)))
+            if frame_diff > 1000:  # Arbitrary threshold for "frame changed"
+                self.frame_change_count += 1
+            if self.frame_change_count % 50 == 0:  # Log every 50 frames
+                logger.info(f"Frame diagnostic: frame_diff={frame_diff:.0f}, frames_changed={self.frame_change_count}")
+        self.last_frame = frame.copy()
 
         # Apply background subtraction
         fg_mask = self.background_subtractor.apply(frame)
