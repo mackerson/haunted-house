@@ -44,20 +44,38 @@ class MotionDetector:
         self.last_frame = None
         self.frame_change_count = 0
 
+        # For continuous frame reading
+        self.current_frame = None
+        self.frame_lock = threading.Lock()
+        self.capture_thread = None
+
+    def _capture_frames_continuously(self):
+        """Background thread to continuously read frames from camera"""
+        logger.info("Frame capture thread started")
+        while self.running:
+            ret, frame = self.camera.read()
+            if ret:
+                with self.frame_lock:
+                    self.current_frame = frame
+            time.sleep(0.01)  # Small delay to prevent CPU spinning
+        logger.info("Frame capture thread stopped")
+
     def start(self):
         """Initialize camera and background subtractor"""
         logger.info(f"Starting camera {self.camera_index}")
-        # Use V4L2 backend explicitly and disable buffering
+        # Use V4L2 backend explicitly
         self.camera = cv2.VideoCapture(self.camera_index, cv2.CAP_V4L2)
 
         if not self.camera.isOpened():
             raise Exception(f"Could not open camera {self.camera_index}")
 
-        # Set buffer size to 1 to avoid stale frames
-        self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        logger.info(f"Camera buffer size set to: {self.camera.get(cv2.CAP_PROP_BUFFERSIZE)}")
+        self.running = True
 
-        # Give camera time to warm up
+        # Start background thread to continuously read frames
+        self.capture_thread = threading.Thread(target=self._capture_frames_continuously, daemon=True)
+        self.capture_thread.start()
+
+        # Give camera time to warm up and start capturing
         logger.info(f"Camera warming up for {self.warmup_time}s")
         time.sleep(self.warmup_time)
 
@@ -68,7 +86,6 @@ class MotionDetector:
             detectShadows=False
         )
 
-        self.running = True
         logger.info("Motion detector started")
 
     def stop(self):
@@ -80,12 +97,15 @@ class MotionDetector:
 
     def detect_motion(self):
         """Check if motion is detected in current frame with debouncing"""
-        if not self.running or not self.camera:
+        if not self.running:
             return False
 
-        ret, frame = self.camera.read()
-        if not ret:
-            logger.warning("Failed to read from camera")
+        # Get the latest frame from the background thread
+        with self.frame_lock:
+            frame = self.current_frame
+
+        if frame is None:
+            logger.warning("No frame available from camera")
             return False
 
         # Check if frame is actually changing (diagnostic)
