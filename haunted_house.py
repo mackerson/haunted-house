@@ -78,6 +78,11 @@ class MotionDetector:
         if not self.running or not self.camera:
             return False
 
+        # Flush camera buffer by grabbing multiple frames
+        # This ensures we get the latest frame, not a stale one
+        for _ in range(3):
+            self.camera.grab()
+
         ret, frame = self.camera.read()
         if not ret:
             logger.warning("Failed to read from camera")
