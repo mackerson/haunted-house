@@ -99,9 +99,8 @@ class MotionDetector:
                 motion_detected = True
                 break
 
-        # Log motion detection attempts periodically
-        if motion_detected or self.motion_frame_count > 0:
-            logger.info(f"Motion check: detected={motion_detected}, max_area={max_area:.0f}, frame_count={self.motion_frame_count}/{self.frames_required}, threshold={self.min_area}")
+        # Always log motion detection for debugging (even when no motion)
+        logger.info(f"Motion check: detected={motion_detected}, max_area={max_area:.0f}, frame_count={self.motion_frame_count}/{self.frames_required}, threshold={self.min_area}")
 
         # Debouncing logic - require consecutive frames
         if motion_detected:
@@ -300,7 +299,7 @@ class HauntedHouse:
         ambient_videos = self.get_ambient_videos()
         if ambient_videos:
             self.mode = PlaybackMode.AMBIENT
-            self.video_controller.play_playlist(ambient_videos)
+            self.video_controller.play_playlist(ambient_videos, mode='ambient')
         else:
             logger.warning("No ambient videos found")
             self.mode = PlaybackMode.IDLE
